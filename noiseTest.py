@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, "./src")
 
 from gratings import grating_model
-from plotting import plot_data, plot_mean_against_index, show_feature, plot_slider
+from plotting import plot_data, plot_mean_against_index, show_feature, receptive_fields
 from persistence import persistence
 from decoding import cohomological_parameterization, remove_feature
 from noisereduction import PCA_reduction, top_noise_reduction, z_cutoff
@@ -50,4 +50,8 @@ plot_mean_against_index(data,decoding1,"phase")
 # plot_mean_against_index(data,decoding2,"phase")
 # plot_data(data,transformation="PCA", labels=decoding2,
 #           colors=["Twilight","Viridis","Twilight","Viridis","Twilight"])
+# %%
+## Plot tuning
+receptive_fields(data, data.reset_index()["orientation"]/np.pi, data.reset_index()["phase"]/2*np.pi)
+
 # %%
