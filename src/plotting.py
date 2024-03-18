@@ -312,39 +312,6 @@ def show_feature(
         ax.axis("off")
     plt.show()
 
-    # Plot the grating parameters against the decoding
-    # try:
-    #     ori_fun = lambda x: angular_mean(np.array(x)[:, 0], period=np.pi, axis=0)
-    #     freq_fun = lambda x: np.mean(np.array(x)[:, 1], axis=0)
-    #     phase_fun = lambda x: angular_mean(np.array(x)[:, 2], period=2 * np.pi, axis=0)
-    #     contrast_fun = lambda x: np.mean(np.array(x)[:, 3], axis=0)
-    #     av_orientation = np.array(list(map(ori_fun, grouped_indices)))
-    #     av_frequency = np.array(list(map(freq_fun, grouped_indices)))
-    #     av_phase = np.array(list(map(phase_fun, grouped_indices)))
-    #     av_contrast = np.array(list(map(contrast_fun, grouped_indices)))
-    # except IndexError:
-    #     print("Error: some bins are empty; choose a smaller bin count.")
-    # else:
-    #     if len(set(orientation)) > 1:
-    #         plt.scatter(np.arange(Nimages), av_orientation)
-    #         plt.xlabel("Decoding")
-    #         plt.ylabel("Orientation")
-    #         plt.show()
-    #     if len(set(frequency)) > 1:
-    #         plt.scatter(np.arange(Nimages), av_frequency)
-    #         plt.xlabel("Decoding")
-    #         plt.ylabel("Frequency")
-    #         plt.show()
-    #     if len(set(phase)) > 1:
-    #         plt.scatter(np.arange(Nimages), av_phase)
-    #         plt.xlabel("Decoding")
-    #         plt.ylabel("Phase")
-    #         plt.show()
-    #     if len(set(contrast)) > 1:
-    #         plt.scatter(np.arange(Nimages), av_contrast)
-    #         plt.xlabel("Decoding")
-    #         plt.ylabel("Contrast")
-    #         plt.show()
     return av_images
 
 
@@ -354,7 +321,7 @@ def receptive_fields(data, feature_x, feature_y, N=100):
 
     Parameters
     ----------
-    data : ndarray(n_x, n_y)
+    data : pd.datarame(n_neurons)
         The firing rate at each datapoint.
     feature_x : ndarray(n_x)
         The first feature to plot against.
@@ -363,21 +330,19 @@ def receptive_fields(data, feature_x, feature_y, N=100):
     N : int, optional, default 100
         The number of pixels in each direction.
     """
-    for neuron in data:
+    n_neurons = len(list(data))
+    fig, axs = plt.subplots(1, n_neurons, figsize=(10 * n_neurons, 10))
+    for ax, neuron in zip(axs, data):
+        # for neuron in data:
         x = np.linspace(0, 1, N)
         xv, yv = np.meshgrid(x, x)
 
         values = data[neuron] - np.mean(np.mean(data))
         values = values / np.ptp(values)
         colors = cm.rainbow(values)
-        plt.scatter(feature_x, feature_y, color=colors)
-        plt.show()
-
-        interpolated_data = scipy.interpolate.griddata(
-            pd.concat([feature_x, feature_y], axis=1), data[neuron], (xv, yv)
-        )
-        plt.imshow(interpolated_data, origin="lower")
-        plt.show()
+        ax.scatter(feature_x, feature_y, color=colors, s=500)
+        ax.axis("off")
+    plt.show()
 
 
 def plot_slider(data_list):
