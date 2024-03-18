@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
 """
 Some plotting functions related to grating stimuli responses
 """
+
 import numpy as np
 import pandas as pd
 import math
 import random
-import scipy
 
 import plotly.graph_objects as go
 from plotly.offline import plot
@@ -14,7 +13,6 @@ from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 import imageio
 from matplotlib import cm
-from ipywidgets import interactive
 
 import sklearn.manifold as manifold
 from sklearn.decomposition import PCA
@@ -32,63 +30,56 @@ def plot_data(data, transformation="None", labels=None, colors=None, save_path=N
 
     Parameters
     ----------
-    data: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
+    data: DataFrame(n_datapoints, n_features):
+        DataFrame containing the data
     transformation: str, optional, default "None"
         The type of dimension reduction used
-        Choose from "None", PCA" or "SpectralEmbedding"
-    labels: dataframe(n_datapoints, n_labels), optional, default None
-        Dataframe containing additional labels to be plotted
+        Choose from "None", "PCA" or "SpectralEmbedding"
+    labels: DataFrame(n_datapoints, n_labels), optional, default None
+        DataFrame containing additional labels to be plotted
     colors: list of str, optional, default None
         A list containing the color scales used for each label
         When None use "Viridis" for all labels
     save_path: str, optional, default None
         When given save the figure here
-
-    Raises
-    ------
-    ValueError
-        When an invalid value for "transformation" is given
     """
-    # Set labels
+
+    # Prepare labels and colors
     indices = data.index
-    plotted_labels = indices.to_frame()
-    if labels is not None:
-        plotted_labels = plotted_labels.join(labels)
-    if colors is None:
-        colors = ["Viridis"] * len(plotted_labels.columns)
-    Nlabels = len(plotted_labels.columns)
+    plotted_labels = (
+        indices.to_frame().join(labels) if labels is not None else pd.DataFrame(indices)
+    )
+    colors = ["Viridis"] * len(plotted_labels.columns) if colors is None else colors
+    n_labels = len(plotted_labels.columns)
 
-    # Transform data to lower dimension
+    # Transform data if specified
     if transformation == "PCA":
-        pca = PCA(n_components=3)
-        pca.fit(data)
-        data = pca.transform(data)
+        data_transformed = PCA(n_components=3).fit_transform(data)
     elif transformation == "SpectralEmbedding":
-        embedding = manifold.SpectralEmbedding(n_components=3, affinity="rbf")
-        data = embedding.fit_transform(data)
+        data_transformed = manifold.SpectralEmbedding(
+            n_components=3, affinity="rbf"
+        ).fit_transform(data)
     elif transformation == "None":
-        pass
+        data_transformed = data
     else:
-        raise ValueError("Invalid plot transformation")
+        raise ValueError(
+            "Invalid plot transformation. Choose from 'None', 'PCA', or 'SpectralEmbedding'."
+        )
 
-    # Plot
-    data = pd.DataFrame(data)
-    data.index = indices
-    fig = go.Figure()
+    # Plot the data
     fig = make_subplots(
         rows=2,
-        cols=math.ceil(Nlabels / 2),
-        specs=[[{"type": "scene"}] * math.ceil(Nlabels / 2)] * 2,
+        cols=math.ceil(n_labels / 2),
+        specs=[[{"type": "scene"}] * math.ceil(n_labels / 2)] * 2,
     )
-    for i, label in enumerate(plotted_labels):
+    for i, label in enumerate(plotted_labels.columns):
         fig.add_trace(
             go.Scatter3d(
                 mode="markers",
                 name=label,
-                x=data[0],
-                y=data[1],
-                z=data[2],
+                x=data_transformed[:, 0],
+                y=data_transformed[:, 1],
+                z=data_transformed[:, 2],
                 text=plotted_labels[label],
                 hoverinfo=["x", "text"],
                 marker=dict(
@@ -101,39 +92,52 @@ def plot_data(data, transformation="None", labels=None, colors=None, save_path=N
             row=i % 2 + 1,
             col=math.floor(i / 2) + 1,
         )
-    fig.update_layout(height=800, width=600 * math.ceil(Nlabels / 2), title_text="")
+    fig.update_layout(height=800, width=600 * math.ceil(n_labels / 2), title_text="")
+
+    # Show or save the plot
     if save_path is None:
         plot(fig)
         fig.show()
     else:
-        path = save_path
-        path += "plot"
-        if transformation != "None":
-            path += "_" + transformation
-        path += ".html"
-        fig.write_html(path)
-    return
+        file_path = (
+            save_path
+            + f"_plot_{transformation if transformation != 'None' else ''}.html"
+        )
+        fig.write_html(file_path)
 
 
 def plot_connections(
     data_points, connections, threshold=0.1, opacity=0.1, save_path=None
 ):
-    # draw a square
+    """
+    Plot connections between data points in a 3D space.
+
+    Parameters
+    ----------
+    data_points : numpy.ndarray
+        3D array containing the coordinates of data points.
+    connections : numpy.ndarray
+        2D array containing the connection strengths between data points.
+    threshold : float, optional
+        Threshold value for considering connections, defaults to 0.1.
+    opacity : float, optional
+        Opacity level of the lines, defaults to 0.1.
+    save_path : str, optional
+        Path to save the plot, defaults to None (showing the plot interactively).
+    """
+    # Draw a square
     x = data_points[:, 0]
     y = data_points[:, 1]
     z = data_points[:, 2]
     N = len(x)
 
-    # the start and end point for each line
+    # The start and end point for each line
     pairs = [(i, j) for i, j in np.ndindex((N, N)) if connections[i, j] > threshold]
 
     trace1 = go.Scatter3d(x=x, y=y, z=z, mode="markers", name="markers")
 
-    x_lines = list()
-    y_lines = list()
-    z_lines = list()
-
-    # create the coordinate list for the lines
+    # Create the coordinate list for the lines
+    x_lines, y_lines, z_lines = [], [], []
     for p in pairs:
         for i in range(2):
             x_lines.append(x[p[i]])
@@ -161,18 +165,20 @@ def plot_connections(
 @multi_input
 def plot_mean_against_index(data, value, index, circ=True, save_path=None):
     """
-    Plot the mean value against an index
+    Plot the mean value against an index.
 
     Parameters
     ----------
-    data: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
-    value : dataframe(n_datapoints)
-        The value we average over
+    data : pandas.DataFrame
+        DataFrame containing the data.
+    value : pandas.DataFrame
+        The value we average over.
     index : str
-        The name of the index we plot against
-    circ : bool, optional, default True
-        Whether or not the index is angular
+        The name of the index we plot against.
+    circ : bool, optional
+        Whether or not the index is angular, defaults to True.
+    save_path : str, optional
+        Path to save the plot, defaults to None (showing the plot interactively).
     """
     unique_index = data.reset_index()[index].unique()
     if len(unique_index) > 1:
@@ -180,12 +186,20 @@ def plot_mean_against_index(data, value, index, circ=True, save_path=None):
             means = value.groupby([index]).agg(lambda X: angular_mean(X, period=1))
         else:
             means = value.groupby([index]).mean()
+
+        plt.figure(figsize=(3, 3))
         plt.scatter(means.index, means)
         if circ:
             plt.ylim(0, 1)
         plt.xlabel(index)
         plt.ylabel(f"mean {value.columns[0]}")
-        plt.show()
+
+        if save_path is not None:
+            plt.savefig(f"{save_path}/plot_mean_against_index.png")
+            plt.close()
+        else:
+            plt.show()
+
     return
 
 
@@ -222,16 +236,7 @@ def show_feature(
         - When "equal_decoding" average such that each image is averaged from
           images within an equal fraction of the decoding
     save_path: str, optional, default None
-        If given, save a gif here
-
-    Raises
-    ------
-    ValueError
-        When an invalid value for "intervals" is given
-
-    Warns
-    -----
-        When some of the bins are empty
+        If provided, save a gif here
     """
     try:
         orientation = decoding.reset_index()["orientation"]
@@ -254,43 +259,43 @@ def show_feature(
     N = decoding.shape[0]
 
     # Convert grating labels
-    if max(phase) > 2 * np.pi:
-        orientation = orientation * np.pi / 180
-        frequency = frequency * 30
-        phase = phase * np.pi / 180
+    if np.max(phase) > 2 * np.pi:
+        orientation = np.radians(orientation)
+        frequency *= 30
+        phase = np.radians(phase)
 
     # Assign images to intervals
     interval_labels = np.zeros(N, dtype=int)
     count = np.zeros(Nimages)
+
     if intervals == "equal_decoding":
-        intervals = np.linspace(min(decoding), max(decoding), Nimages + 1)
+        intervals = np.linspace(np.min(decoding), np.max(decoding), Nimages + 1)
         for i in range(Nimages):
-            for j in range(N):
-                if (intervals[i] <= decoding[j]) and (decoding[j] <= intervals[i + 1]):
-                    interval_labels[j] = i
-                    count[i] += 1
+            interval_indices = np.where(
+                (intervals[i] <= decoding) & (decoding <= intervals[i + 1])
+            )[0]
+            interval_labels[interval_indices] = i
+            count[i] = len(interval_indices)
     elif intervals == "equal_images":
-        interval_labels = (np.floor(np.linspace(0, Nimages - 0.01, N))).astype(int)
-        interval_labels = interval_labels[np.argsort(decoding)]
+        sorted_indices = np.argsort(decoding)
+        interval_labels[sorted_indices] = np.floor(
+            np.linspace(0, Nimages - 0.01, N)
+        ).astype(int)
         for i in range(Nimages):
-            count[i] = (interval_labels[interval_labels == i]).shape[0]
+            count[i] = np.sum(interval_labels == i)
     else:
         raise ValueError("Invalid intervals type")
-        return
 
     # Average over grating images
     av_images = np.zeros([Nimages, Npixels, Npixels])
-    grouped_indices = [[] for _ in range(Nimages)]
-    iterator = trange(0, N, position=0, leave=True)
-    iterator.set_description("Averaging images")
-    for j in iterator:
-        pars = np.array([orientation[j], frequency[j], phase[j], contrast[j]])
-        grouped_indices[interval_labels[j]].append(pars)
-        if random.choice([True, False]):
-            av_images[interval_labels[j]] += grating_image(pars, N=Npixels, plot=False)
-    for i in range(Nimages):
+    iterator = trange(Nimages, desc="Averaging images", position=0, leave=True)
+    for i in iterator:
         if count[i] != 0:
-            av_images[i] = av_images[i] / count[i]
+            indices = np.where(interval_labels == i)[0]
+            for j in indices:
+                pars = np.array([orientation[j], frequency[j], phase[j], contrast[j]])
+                av_images[i] += grating_image(pars, N=Npixels, plot=False)
+            av_images[i] /= count[i]
 
     print("Number of images averaged over:")
     print(count)
@@ -299,17 +304,17 @@ def show_feature(
         av_images = av_images / np.max(np.abs(av_images))
 
     # Show averages and make gif
+    fig, axs = plt.subplots(1, Nimages, figsize=(10 * Nimages, 10))
     for i in range(Nimages):
-        if not math.isnan(av_images[i, 0, 0]):
-            if save_path is not None:
-                plt.savefig(save_path + "_image" + str(i + 1) + ".png")
-    frames = (255 * 0.5 * (1 + av_images)).astype(np.uint8)
+        axs[i].imshow(av_images[i], cmap="Greys")
+        axs[i].axis("off")
+        if save_path is not None:
+            plt.savefig(f"{save_path}_image{i + 1}.png")
+
     if save_path is not None:
-        imageio.mimsave(save_path + ".gif", frames)
-    fig, axs = plt.subplots(1, len(frames), figsize=(10, 10))
-    for ax, frame in zip(axs, frames):
-        ax.imshow(frame, cmap="Greys")
-        ax.axis("off")
+        frames = (255 * 0.5 * (1 + av_images)).astype(np.uint8)
+        imageio.mimsave(f"{save_path}.gif", frames)
+
     plt.show()
 
     return av_images
@@ -317,12 +322,12 @@ def show_feature(
 
 def receptive_fields(data, feature_x, feature_y, N=100):
     """
-    Plot the 2d receptive fields of neurons responding to two features
+    Plot the 2D receptive fields of neurons responding to two features.
 
     Parameters
     ----------
-    data : pd.datarame(n_neurons)
-        The firing rate at each datapoint.
+    data : pd.DataFrame(n_neurons)
+        The firing rate at each data point.
     feature_x : ndarray(n_x)
         The first feature to plot against.
     feature_y : ndarray(n_y)
@@ -330,68 +335,73 @@ def receptive_fields(data, feature_x, feature_y, N=100):
     N : int, optional, default 100
         The number of pixels in each direction.
     """
-    n_neurons = len(list(data))
+    n_neurons = len(data.columns)
     fig, axs = plt.subplots(1, n_neurons, figsize=(10 * n_neurons, 10))
-    for ax, neuron in zip(axs, data):
-        # for neuron in data:
+    for ax, neuron in zip(axs, data.columns):
         x = np.linspace(0, 1, N)
         xv, yv = np.meshgrid(x, x)
 
-        values = data[neuron] - np.mean(np.mean(data))
-        values = values / np.ptp(values)
+        values = data[neuron].values - np.mean(data.values)
+        values /= np.ptp(values)
         colors = cm.rainbow(values)
         ax.scatter(feature_x, feature_y, color=colors, s=3000)
         ax.axis("off")
     plt.show()
 
 
+
 def plot_slider(data_list):
     """
-    Create a plot with a slider to vary which data set is shown
+    Create a plot with a slider to vary which dataset is shown.
 
     Parameters
     ----------
     data_list: list
-        list containing dataframes
+        List containing DataFrames.
     """
     # Create figure
     fig = go.Figure()
 
-    # Add traces, one for each slider step
-    for df in data_list:
+    # Add traces, one for each DataFrame in data_list
+    for i, df in enumerate(data_list):
         fig.add_trace(
             go.Scatter3d(
                 mode="markers",
-                visible=False,
+                visible=(i == 0),  # Show the first dataset initially
                 opacity=0.5,
-                name="𝜈 = ",
+                name=f"Dataset {i+1}",
                 x=df[0],
                 y=df[1],
                 z=df[3],
-                marker=dict(
-                    size=3,
-                ),
+                marker=dict(size=3),
             )
         )
 
-    # Start with trace visible
-    fig.data[-1].visible = True
-
-    # Create and add slider
+    # Create slider steps
     steps = []
-    for i in range(len(fig.data)):
+    for i in range(len(data_list)):
         step = dict(
             method="update",
             args=[
-                {"visible": [False] * len(fig.data)},
-                {"title": "Slider switched to step: " + str(i)},
+                {
+                    "visible": [(j == i) for j in range(len(data_list))]
+                },  # Show only the selected dataset
+                {
+                    "title": f"Dataset {i+1}"
+                },  # Update title with the selected dataset number
             ],
         )
-        step["args"][0]["visible"][i] = True
         steps.append(step)
 
-    sliders = [dict(active=10, currentvalue={"prefix": ""}, pad={"t": 50}, steps=steps)]
+    # Add slider
+    sliders = [
+        dict(
+            active=0,  # Start with the first dataset active
+            currentvalue={"prefix": "Dataset: "},
+            pad={"t": 50},
+            steps=steps,
+        )
+    ]
 
     fig.update_layout(sliders=sliders)
-
     fig.show()
