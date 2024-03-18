@@ -1,0 +1,10 @@
+.pyc
+output/
+data/
+temp-plot.html
+natural_images.py
+Naturalimages2.py
+noiseTest.py
+oriTun.py
+phase_ori.py
+stringer.py
