@@ -340,7 +340,7 @@ def receptive_fields(data, feature_x, feature_y, N=100):
         values = data[neuron] - np.mean(np.mean(data))
         values = values / np.ptp(values)
         colors = cm.rainbow(values)
-        ax.scatter(feature_x, feature_y, color=colors, s=500)
+        ax.scatter(feature_x, feature_y, color=colors, s=3000)
         ax.axis("off")
     plt.show()
 
