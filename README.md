@@ -23,6 +23,6 @@ and extend to work on neural data in the primary visual cortex, where we may fin
 
 ```bash
     conda env create -f environment.yaml
-    conda activate 
+    conda activate top_vision
 ```
 3. Run the "example.ipynb" script in the main folder.
