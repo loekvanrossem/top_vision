@@ -367,7 +367,7 @@ def plot_slider(data_list):
                 name=f"Dataset {i+1}",
                 x=df[0],
                 y=df[1],
-                z=df[3],
+                z=df[2],
                 marker=dict(size=3),
             )
         )
