@@ -1,0 +1,28 @@
+name: top_vision
+
+channels:
+  - conda-forge
+  - pytorch
+
+dependencies:
+  - python>=3.10
+  - ipython
+  - ipykernel
+  - ipywidgets
+
+  - tqdm
+
+  - numpy
+  - scipy
+  - pandas>=2.0.0
+  - scikit-learn
+  - numba
+
+  - matplotlib
+  - plotly
+  - imageio
+  - nbformat
+
+  - ripser
+
+  - pip
