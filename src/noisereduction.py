@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 A collection of noise reduction algorithms
 """
+
 import numpy as np
 import scipy
 import pandas as pd
@@ -14,20 +14,60 @@ from numba import njit, prange
 from plotting import plot_slider
 
 
+# @njit(parallel=True)
+# def _compute_gradient_F(S, X, sigma, omega):
+#     """Compute gradient of F as in arxiv:0910.5947"""
+#     gradF = np.zeros(S.shape)
+#     d = X.shape[1]
+#     N = X.shape[0]
+#     M = S.shape[0]
+#     for j in range(0, M):
+#         normsSX = np.square(S[j] - X).sum(axis=1)
+#         normsSS = np.square(S[j] - S).sum(axis=1)
+#         expsSX = np.exp(-1 / (2 * sigma**2) * normsSX)
+#         expsSS = np.exp(-1 / (2 * sigma**2) * normsSS)
+#         SX, SS = np.zeros(d), np.zeros(d)
+#         for k in range(0, d):
+#             SX[k] = -1 / (N * sigma**2) * np.sum((S[j] - X)[:, k] * expsSX)
+#             SS[k] = omega / (M * sigma**2) * np.sum((S[j] - S)[:, k] * expsSS)
+#         gradF[j] = SX + SS
+#     return gradF
+
+
 @njit(parallel=True)
-def compute_gradient(S, X, sigma, omega):
-    """Compute gradient of F as in arxiv:0910.5947"""
+def _compute_gradient_F(
+    S: np.ndarray, X: np.ndarray, sigma: float, omega: float
+) -> np.ndarray:
+    """
+    Compute the gradient of F as described in arxiv:0910.5947.
+
+    Parameters
+    ----------
+    S : np.ndarray
+        Matrix S of shape (M, d) representing the set of prototypes.
+    X : np.ndarray
+        Matrix X of shape (N, d) representing the data points.
+    sigma : float
+        Parameter controlling the Gaussian kernel width.
+    omega : float
+        Regularization parameter.
+
+    Returns
+    -------
+    gradF : np.ndarray
+        Gradient of F with respect to the prototypes S, of shape (M, d).
+    """
     gradF = np.zeros(S.shape)
     d = X.shape[1]
     N = X.shape[0]
     M = S.shape[0]
-    for j in range(0, M):
+    for j in prange(M):
         normsSX = np.square(S[j] - X).sum(axis=1)
         normsSS = np.square(S[j] - S).sum(axis=1)
         expsSX = np.exp(-1 / (2 * sigma**2) * normsSX)
         expsSS = np.exp(-1 / (2 * sigma**2) * normsSS)
         SX, SS = np.zeros(d), np.zeros(d)
-        for k in range(0, d):
+        for k in range(d):
             SX[k] = -1 / (N * sigma**2) * np.sum((S[j] - X)[:, k] * expsSX)
             SS[k] = omega / (M * sigma**2) * np.sum((S[j] - S)[:, k] * expsSS)
         gradF[j] = SX + SS
@@ -35,27 +75,40 @@ def compute_gradient(S, X, sigma, omega):
 
 
 def top_noise_reduction(
-    X, n=100, speed=0.02, omega=0.2, fraction=0.1, plot_history=False
-):
+    X: pd.DataFrame,
+    n: int = 100,
+    speed: float = 0.02,
+    omega: float = 0.2,
+    fraction: float = 0.1,
+    plot_history: bool = False,
+) -> pd.DataFrame:
     """
-    Topological denoising algorithm as in arxiv:0910.5947
+    Topological denoising algorithm as in arxiv:0910.5947.
 
     Parameters
     ----------
-    X: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
-    n: int, optional, default 100
-        Number of iterations
-    speed: float, optional, default 0.02
-        The speed at which data points move during computation
-    omega: float, optional, default 0.2
-        Strength of the repulsive force between datapoints
-    fraction: float between 0 and 1, optional, default 0.1
+    X : pd.DataFrame
+        Dataframe containing the data.
+    n : int, optional
+        Number of iterations, default is 100.
+    speed : float, optional
+        The speed at which data points move during computation, default is 0.02.
+    omega : float, optional
+        Strength of the repulsive force between datapoints, default is 0.2.
+    fraction : float, optional
         The fraction of datapoints from which the denoised dataset is
-        constructed
-    plot_history: bool, optional, default False
-        When true plot how the datset looked during computation
+        constructed, default is 0.1.
+    plot_history : bool, optional
+        When true plot how the dataset looked during computation, default is False.
+
+    Returns
+    -------
+    pd.DataFrame
+        Denoised dataset.
     """
+    if not 0 < fraction <= 1:
+        raise ValueError("Fraction must be between 0 and 1.")
+
     n_plot_steps = 100
     N = X.shape[0]
     S = X.iloc[np.random.choice(N, round(fraction * N), replace=False)]
@@ -66,7 +119,7 @@ def top_noise_reduction(
     iterator = trange(0, n, position=0, leave=True)
     iterator.set_description("Topological noise reduction")
     for i in iterator:
-        gradF = compute_gradient(S.to_numpy(), X.to_numpy(), sigma, omega)
+        gradF = _compute_gradient_F(S.to_numpy(), X.to_numpy(), sigma, omega)
 
         if i == 0:
             maxgradF = np.max(np.sqrt(np.square(gradF).sum(axis=1)))
@@ -80,6 +133,54 @@ def top_noise_reduction(
         plot_slider(history)
 
     return S
+
+
+# def top_noise_reduction(
+#     X, n=100, speed=0.02, omega=0.2, fraction=0.1, plot_history=False
+# ):
+#     """
+#     Topological denoising algorithm as in arxiv:0910.5947
+
+#     Parameters
+#     ----------
+#     X: dataframe(n_datapoints, n_features):
+#         Dataframe containing the data
+#     n: int, optional, default 100
+#         Number of iterations
+#     speed: float, optional, default 0.02
+#         The speed at which data points move during computation
+#     omega: float, optional, default 0.2
+#         Strength of the repulsive force between datapoints
+#     fraction: float between 0 and 1, optional, default 0.1
+#         The fraction of datapoints from which the denoised dataset is
+#         constructed
+#     plot_history: bool, optional, default False
+#         When true plot how the datset looked during computation
+#     """
+#     n_plot_steps = 100
+#     N = X.shape[0]
+#     S = X.iloc[np.random.choice(N, round(fraction * N), replace=False)]
+#     sigma = X.stack().std()
+#     c = speed * np.max(scipy.spatial.distance.cdist(X, X, metric="euclidean"))
+#     history = [S]
+
+#     iterator = trange(0, n, position=0, leave=True)
+#     iterator.set_description("Topological noise reduction")
+#     for i in iterator:
+#         gradF = _compute_gradient_F(S.to_numpy(), X.to_numpy(), sigma, omega)
+
+#         if i == 0:
+#             maxgradF = np.max(np.sqrt(np.square(gradF).sum(axis=1)))
+#         S = S + c * gradF / maxgradF
+
+#         if plot_history:
+#             if i % np.ceil(n / n_plot_steps) == 0:
+#                 history.append(S)
+
+#     if plot_history:
+#         plot_slider(history)
+
+#     return S
 
 
 @njit(parallel=True)
