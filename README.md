@@ -13,7 +13,7 @@ and extend to work on neural data in the primary visual cortex, where we may fin
 ## Contents
 
 - **source:** This folder contains source code and utilities used for analyzing data.
-- **example.ipynb:** This file contains an example of decoding simulated neural activities of simple cells in response to grating with varying phases and orientations. 
+- **example.ipynb:** This file contains an example of decoding simulated neural activities of simple cells in response to grating images. 
 - **environment.yaml:** This file lists the required packages and dependencies needed.
 
 ## Usage
@@ -26,3 +26,11 @@ and extend to work on neural data in the primary visual cortex, where we may fin
     conda activate top_vision
 ```
 3. Run the "example.ipynb" script in the main folder.
+
+## Example
+In "example.ipynb" the 2d receptive fields of simulated neurons responding to gratings with varying phases and orientations are reconstructed using only the neural activations.
+
+External receptive fields with respect to the used stimuli parameters:
+![Example Image](external_receptive_fields.png)
+Internal receptive fields computed from the topology:
+![Example Image](internal_receptive_fields.png)
