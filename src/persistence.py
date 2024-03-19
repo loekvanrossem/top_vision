@@ -1,55 +1,86 @@
-# -*- coding: utf-8 -*-
 """
-Tools to compute persistence diagrams
+Computational tools for persistence diagrams
 
 Persistent homology from ripser and gudhi library
 Confidence sets from arxiv:1303.7117
 """
+
 import numpy as np
+import pandas as pd
 from scipy.spatial.distance import directed_hausdorff
-
 import matplotlib.pyplot as plt
-
 from tqdm import trange
-
 import ripser
 from persim import plot_diagrams
 import gudhi
 
 
-def hausdorff(data1, data2, homdim, coeff):
-    """Hausdorff metric between two persistence diagrams"""
-    dgm1 = (ripser.ripser(data1, maxdim=homdim, coeff=coeff))["dgms"]
-    dgm2 = (ripser.ripser(data2, maxdim=homdim, coeff=coeff))["dgms"]
+def hausdorff(data1: np.ndarray, data2: np.ndarray, homdim: int, coeff: int) -> float:
+    """
+    Compute the Hausdorff distance between two persistence diagrams.
+
+    Parameters
+    ----------
+    data1 : np.ndarray
+        The first persistence diagram.
+    data2 : np.ndarray
+        The second persistence diagram.
+    homdim : int
+        Homological dimension.
+    coeff : int
+        Coefficient field for homology.
+
+    Returns
+    -------
+    float
+        The Hausdorff distance between the two persistence diagrams.
+    """
+    dgm1 = ripser.ripser(data1, maxdim=homdim, coeff=coeff)["dgms"]
+    dgm2 = ripser.ripser(data2, maxdim=homdim, coeff=coeff)["dgms"]
     distance = directed_hausdorff(dgm1[homdim], dgm2[homdim])[0]
     return distance
 
 
-def confidence(X, alpha=0.05, Nsubsamples=20, homdim=1, coeff=2):
+def confidence(
+    X: pd.DataFrame,
+    alpha: float = 0.05,
+    Nsubsamples: int = 20,
+    homdim: int = 1,
+    coeff: int = 2,
+) -> float:
     """
-    Compute the confidence interval of the persistence diagram of a dataset
+    Compute the confidence interval of the persistence diagram of a dataset.
 
     Computation done by subsampling as in arxiv:1303.7117
 
     Parameters
     ----------
-    X: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
-    alpha : float between 0 and 1, optional, default 0.05
-        1-alpha is the confidence
-    Nsubsamples : int, optional, default 20
-        The number of subsamples
-    homdim : int, optional, default 1
-        The dimension of the homology
-    coeff : int prime, optional, default 2
-        The coefficient basis
+    X : pd.DataFrame
+        Dataframe containing the data.
+    alpha : float, optional
+        1-alpha is the confidence level, default is 0.05.
+    Nsubsamples : int, optional
+        The number of subsamples, default is 20.
+    homdim : int, optional
+        The dimension of the homology, default is 1.
+    coeff : int, optional
+        The coefficient basis, default is 2.
+
+    Returns
+    -------
+    float
+        The confidence interval.
     """
+    if not (0 < alpha < 1):
+        raise ValueError("Alpha must be between 0 and 1.")
+    if Nsubsamples < 1:
+        raise ValueError("Nsubsamples must be at least 1.")
     N = X.shape[0]
     distances = np.zeros(Nsubsamples)
-    iterator = trange(0, Nsubsamples, position=0, leave=True)
+    iterator = trange(Nsubsamples, position=0, leave=True)
     iterator.set_description("Computing confidence interval")
     for i in iterator:
-        subsample = X.iloc[np.random.choice(N, N, replace=True)]
+        subsample = X.sample(N, replace=True)
         distances[i] = hausdorff(X, subsample, homdim, coeff)
     distances.sort()
     confidence = np.sqrt(2) * 2 * distances[int(alpha * Nsubsamples)]
@@ -57,46 +88,46 @@ def confidence(X, alpha=0.05, Nsubsamples=20, homdim=1, coeff=2):
 
 
 def persistence(
-    X,
-    homdim=1,
-    coeff=2,
-    threshold=float("inf"),
-    show_largest_homology=0,
-    distance_matrix=False,
-    Nsubsamples=0,
-    alpha=0.05,
-    cycle=None,
-    save_path=None,
-):
+    X: pd.DataFrame,
+    homdim: int = 1,
+    coeff: int = 2,
+    threshold: float = float("inf"),
+    show_largest_homology: int = 0,
+    distance_matrix: bool = False,
+    Nsubsamples: int = 0,
+    alpha: float = 0.05,
+    cycle: int = None,
+    save_path: str = None,
+) -> None:
     """
-    Plot the persistence diagram of a dataset using ripser
+    Plot the persistence diagram of a dataset using ripser.
 
-    Also prints the five largest homology components
+    Also prints the five largest homology components.
 
     Parameters
     ----------
-    X: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
-    homdim : int, optional, default 1
-        The dimension of the homology
-    coeff : int prime, optional, default 2
-        The coefficient basis
-    threshold : float, optional, default infinity
-        The maximum distance in the filtration
-    show_largest_homology: int, optional, default 0
-        Print this many of the largest homology components
-    distance_matrix : bool, optional, default False
-        When true X will be interepreted as a distance matrix
-    Nsubsamples : int, optional, default 0
-        The number of subsamples used in computing the confidence interval
-        Does not compute the confidence interval when this is 0
-    alpha : float between 0 and 1, optional, default 0.05
-        1-alpha is the confidence
-    cycle : int, optional, default None
+    X : pd.DataFrame
+        Dataframe containing the data.
+    homdim : int, optional
+        The dimension of the homology, default is 1.
+    coeff : int, optional
+        The coefficient basis, default is 2.
+    threshold : float, optional
+        The maximum distance in the filtration, default is infinity.
+    show_largest_homology : int, optional
+        Print this many of the largest homology components, default is 0.
+    distance_matrix : bool, optional
+        When true X will be interpreted as a distance matrix, default is False.
+    Nsubsamples : int, optional
+        The number of subsamples used in computing the confidence interval.
+        Does not compute the confidence interval when this is 0, default is 0.
+    alpha : float, optional
+        1-alpha is the confidence level, default is 0.05.
+    cycle : int, optional
         If given highlight the homology component in the plot corresponding to
-        this cycle id
-    save_path : str, optional, default None
-        When given save the plot here
+        this cycle id, default is None.
+    save_path : str, optional
+        When given save the plot here, default is None.
     """
     result = ripser.ripser(
         X,
@@ -108,8 +139,9 @@ def persistence(
     )
     diagrams = result["dgms"]
     plot_diagrams(diagrams, show=False)
+
     if Nsubsamples > 0:
-        conf = confidence(X, alpha, Nsubsamples, homdim, 2)
+        conf = confidence(X, alpha, Nsubsamples, homdim, coeff)
         line_length = 10000
         plt.plot(
             [0, line_length],
@@ -118,15 +150,18 @@ def persistence(
             linestyle="dashed",
             linewidth=2,
         )
+
     if cycle is not None:
         dgm1 = diagrams[1]
         plt.scatter(dgm1[cycle, 0], dgm1[cycle, 1], 20, "k", "x")
+
     if save_path is not None:
-        path = save_path + "Z" + str(coeff)
+        path = f"{save_path}Z{coeff}"
         if Nsubsamples > 0:
-            path += "_confidence" + str(1 - alpha)
+            path += f"_confidence{1 - alpha}"
         path += ".png"
         plt.savefig(path)
+
     plt.show()
 
     if show_largest_homology != 0:
@@ -135,14 +170,13 @@ def persistence(
         largest_components = dgm[largest_indices[:show_largest_homology]]
         print(f"Largest {homdim}-homology components:")
         print(largest_components)
-    return
 
 
 def persistence_witness(X, number_of_landmarks=100, max_alpha_square=0.0, homdim=1):
     """
     Plot the persistence diagram of a dataset using gudhi
 
-    Uses a witness complex allowing it to be used on larger datasets
+    Uses a witness complex allowing it to be used efficiently on larger datasets
 
     Parameters
     ----------
@@ -182,4 +216,3 @@ def persistence_witness(X, number_of_landmarks=100, max_alpha_square=0.0, homdim
     print(simplex_tree.betti_numbers())
     gudhi.plot_persistence_diagram(diag, band=0.0)
     plt.show()
-    return
