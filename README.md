@@ -8,7 +8,7 @@ When attempting to decode neural data one may not always have access to the rela
 
 https://arxiv.org/abs/1711.07205
 
-and extend to work on neural data in the primary visual cortex, where we may find more complicated topologies such as a Klein bottle. An example is provided where simulated neural activities in response to grating with varying phases and orientations are decoded.
+and extend it to work on neural data in the primary visual cortex, where we may find more complicated topologies such as a Klein bottle. An example is provided where simulated neural activities in response to grating with varying phases and orientations are decoded.
 
 ## Contents
 
@@ -28,7 +28,7 @@ and extend to work on neural data in the primary visual cortex, where we may fin
 3. Run the "example.ipynb" script in the main folder.
 
 ## Example
-In "example.ipynb" the 2d receptive fields of simulated neurons responding to gratings with varying phases and orientations are reconstructed using only the neural activations.
+In "example.ipynb" the 2d receptive fields of simulated neurons responding to gratings with varying phases and orientations are reconstructed using only the neural activations, using no reference to the stimuli labels as is typical in decoding methods.
 
 External receptive fields with respect to the used stimuli parameters:
 ![Example Image](external_receptive_fields.png)
