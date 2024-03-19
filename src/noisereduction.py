@@ -14,26 +14,6 @@ from numba import njit, prange
 from plotting import plot_slider
 
 
-# @njit(parallel=True)
-# def _compute_gradient_F(S, X, sigma, omega):
-#     """Compute gradient of F as in arxiv:0910.5947"""
-#     gradF = np.zeros(S.shape)
-#     d = X.shape[1]
-#     N = X.shape[0]
-#     M = S.shape[0]
-#     for j in range(0, M):
-#         normsSX = np.square(S[j] - X).sum(axis=1)
-#         normsSS = np.square(S[j] - S).sum(axis=1)
-#         expsSX = np.exp(-1 / (2 * sigma**2) * normsSX)
-#         expsSS = np.exp(-1 / (2 * sigma**2) * normsSS)
-#         SX, SS = np.zeros(d), np.zeros(d)
-#         for k in range(0, d):
-#             SX[k] = -1 / (N * sigma**2) * np.sum((S[j] - X)[:, k] * expsSX)
-#             SS[k] = omega / (M * sigma**2) * np.sum((S[j] - S)[:, k] * expsSS)
-#         gradF[j] = SX + SS
-#     return gradF
-
-
 @njit(parallel=True)
 def _compute_gradient_F(
     S: np.ndarray, X: np.ndarray, sigma: float, omega: float
@@ -44,18 +24,18 @@ def _compute_gradient_F(
     Parameters
     ----------
     S : np.ndarray
-        Matrix S of shape (M, d) representing the set of prototypes.
+        Matrix S of shape (M, d) representing the subset constructing the denoised set.
     X : np.ndarray
-        Matrix X of shape (N, d) representing the data points.
+        Matrix X of shape (N, d) representing the full dataset.
     sigma : float
         Parameter controlling the Gaussian kernel width.
     omega : float
-        Regularization parameter.
+        Strength of the repulsive force between datapoints.
 
     Returns
     -------
     gradF : np.ndarray
-        Gradient of F with respect to the prototypes S, of shape (M, d).
+        Gradient of F with respect to the subset S, of shape (M, d).
     """
     gradF = np.zeros(S.shape)
     d = X.shape[1]
@@ -96,8 +76,8 @@ def top_noise_reduction(
     omega : float, optional
         Strength of the repulsive force between datapoints, default is 0.2.
     fraction : float, optional
-        The fraction of datapoints from which the denoised dataset is
-        constructed, default is 0.1.
+        The fraction of datapoints from which the denoised dataset is constructed,
+        default is 0.1.
     plot_history : bool, optional
         When true plot how the dataset looked during computation, default is False.
 
@@ -135,90 +115,82 @@ def top_noise_reduction(
     return S
 
 
-# def top_noise_reduction(
-#     X, n=100, speed=0.02, omega=0.2, fraction=0.1, plot_history=False
-# ):
-#     """
-#     Topological denoising algorithm as in arxiv:0910.5947
-
-#     Parameters
-#     ----------
-#     X: dataframe(n_datapoints, n_features):
-#         Dataframe containing the data
-#     n: int, optional, default 100
-#         Number of iterations
-#     speed: float, optional, default 0.02
-#         The speed at which data points move during computation
-#     omega: float, optional, default 0.2
-#         Strength of the repulsive force between datapoints
-#     fraction: float between 0 and 1, optional, default 0.1
-#         The fraction of datapoints from which the denoised dataset is
-#         constructed
-#     plot_history: bool, optional, default False
-#         When true plot how the datset looked during computation
-#     """
-#     n_plot_steps = 100
-#     N = X.shape[0]
-#     S = X.iloc[np.random.choice(N, round(fraction * N), replace=False)]
-#     sigma = X.stack().std()
-#     c = speed * np.max(scipy.spatial.distance.cdist(X, X, metric="euclidean"))
-#     history = [S]
-
-#     iterator = trange(0, n, position=0, leave=True)
-#     iterator.set_description("Topological noise reduction")
-#     for i in iterator:
-#         gradF = _compute_gradient_F(S.to_numpy(), X.to_numpy(), sigma, omega)
-
-#         if i == 0:
-#             maxgradF = np.max(np.sqrt(np.square(gradF).sum(axis=1)))
-#         S = S + c * gradF / maxgradF
-
-#         if plot_history:
-#             if i % np.ceil(n / n_plot_steps) == 0:
-#                 history.append(S)
-
-#     if plot_history:
-#         plot_slider(history)
-
-#     return S
-
-
 @njit(parallel=True)
-def density_estimation(X, k):
-    """Estimates density at each point"""
+def density_estimation(X: np.ndarray, k: int) -> np.ndarray:
+    """
+    Estimates density at each point.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Data points.
+    k : int
+        Density is estimated as 1 over the distance to the k-th nearest point.
+
+    Returns
+    -------
+    np.ndarray
+        Array containing density estimates for each point.
+    """
     N = X.shape[0]
     densities = np.zeros(N)
-    for i in prange(N):
+    for i in range(N):
         distances = np.sum((X[i] - X) ** 2, axis=1)
         densities[i] = 1 / np.sort(distances)[k]
     return densities
 
 
-def density_filtration(X, k, fraction):
+def density_filtration(X: pd.DataFrame, k: int, fraction: float) -> pd.DataFrame:
     """
-    Returns the points which are in locations with high density
+    Returns the points with highest density.
 
     Parameters
     ----------
-    X: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
-    k: int
-        Density is estimated as 1 over the distance to the k-th nearest point
-    fraction: float between 0 and 1
-        The fraction of highest density datapoints that are returned
+    X : pd.DataFrame
+        Dataframe containing the data.
+    k : int
+        Density is estimated as 1 over the distance to the k-th nearest point.
+    fraction : float
+        The fraction of highest density datapoints that are returned.
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe containing the points with highest density.
     """
-    print("Applying density filtration...", end=" ")
-    N = X.shape[0]
+    if not (0 <= fraction <= 1):
+        raise ValueError("Fraction must be between 0 and 1.")
+
+    if not (0 < k <= X.shape[0]):
+        raise ValueError(
+            "k must be greater than 0 and less than or equal to the number of data points."
+        )
+
+    print("Applying density filtration...")
     X["densities"] = density_estimation(X.to_numpy().astype(np.float), k)
-    X = X.nlargest(int(fraction * N), "densities")
+    X = X.nlargest(int(fraction * X.shape[0]), "densities")
     X = X.drop(columns="densities")
-    print("done")
+    print("Density filtration complete.")
     return X
 
 
 @njit(parallel=True)
-def compute_averages(X, r):
-    """Used in neighborhood_average"""
+def _compute_averages(X: np.ndarray, r: float) -> np.ndarray:
+    """
+    Compute neighborhood averages.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Data points.
+    r : float
+        Radius within which points are averaged.
+
+    Returns
+    -------
+    np.ndarray
+        Array containing neighborhood averages for each point.
+    """
     N = X.shape[0]
     averages = np.zeros(X.shape)
     for i in prange(N):
@@ -228,59 +200,83 @@ def compute_averages(X, r):
     return averages
 
 
-def neighborhood_average(X, r):
+def neighborhood_average(X: pd.DataFrame, r: float) -> pd.DataFrame:
     """
-    Replace each point by an average over its neighborhood
+    Replace each point by an average over its neighborhood.
 
     Parameters
     ----------
-    X: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
+    X : pd.DataFrame
+        Dataframe containing the data.
     r : float
-        Points are averaged over all points within radius r
+        Points are averaged over all points within radius r.
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe containing the points averaged over their neighborhoods.
     """
-    print("Applying neighborhood average...", end=" ")
-    averages = compute_averages(X.to_numpy().astype(np.float), r)
-    print("done")
-    result = pd.DataFrame(data=averages, index=X.index)
-    return result
+    if r <= 0:
+        raise ValueError("Radius 'r' must be greater than 0.")
+
+    print("Applying neighborhood average...")
+    averages = _compute_averages(X.to_numpy().astype(np.float), r)
+    print("Neighborhood average applied.")
+
+    return pd.DataFrame(data=averages, index=X.index, columns=X.columns)
 
 
-def z_cutoff(X, z_cutoff):
+def z_cutoff(X: pd.DataFrame, z_cutoff: float) -> pd.DataFrame:
     """
-    Remove outliers with a high Z-score
+    Remove outliers with a high Z-score.
 
     Parameters
     ----------
-    X: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
+    X : pd.DataFrame
+        Dataframe containing the data.
     z_cutoff : float
-        The Z-score at which points are removed
+        The Z-score at which points are removed.
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe containing the data after removing outliers.
     """
-    z = np.abs(scipy.stats.zscore(np.sqrt(np.square(X).sum(axis=1))))
-    result = X[(z < z_cutoff)]
-    print(
-        f"{len(X) - len(result)} datapoints with Z-score above {z_cutoff}" + " removed"
-    )
+    if z_cutoff < 0:
+        raise ValueError("z_cutoff must be non-negative.")
+
+    z_scores = np.abs(scipy.stats.zscore(X))
+    result = X[(z_scores < z_cutoff).all(axis=1)]
+    removed_count = len(X) - len(result)
+
+    print(f"{removed_count} datapoints with Z-score above {z_cutoff} removed.")
     return result
 
 
-def PCA_reduction(X, dim):
+def PCA_reduction(X: pd.DataFrame, dim: int) -> (pd.DataFrame, np.ndarray):
     """
-    Use principle component analysis to reduce the data to a lower dimension
+    Use principal component analysis to reduce the data to a lower dimension.
 
-    Also print the variance explained by each component
     Parameters
     ----------
-    X: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
+    X : pd.DataFrame
+        Dataframe containing the data.
     dim : int
-        The number of dimensions the data is reduced to
+        The number of dimensions the data is reduced to.
+
+    Returns
+    -------
+    X_reduced : pd.DataFrame
+        Dataframe containing the data after PCA reduction.
     """
+    if not isinstance(dim, int) or dim <= 0:
+        raise ValueError("dim must be a positive integer.")
+
+    if dim > X.shape[1]:
+        raise ValueError("dim cannot exceed the number of features in the dataset.")
+
     pca = PCA(n_components=dim)
     pca.fit(X)
-    columns = [i for i in range(dim)]
-    X = pd.DataFrame(pca.transform(X), columns=columns, index=X.index)
-    print("PCA explained variance:")
-    print(pca.explained_variance_ratio_)
+    X = pd.DataFrame(pca.transform(X), columns=[i for i in range(dim)], index=X.index)
+    print(f"PCA explained variance: {pca.explained_variance_ratio_}")
     return X
