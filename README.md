@@ -4,7 +4,7 @@ This toolkit provides a collection of Python functions for topological data anal
 
 ## Overview
 
-When attempting to decode neural data one may not always have access to the relavent stimuli values, or even know which stimuli the neurons may respond to. Therefore, in contrast to most traditional neural decoding methods, we may want to find a decoding based solely on the shape of the population activity, without making use of the stimuli labels. Here we apply a topological data analysis method described in:
+When attempting to decode neural data one may not always have access to the relevant stimuli values, or even know which stimuli the neurons may respond to. Therefore, in contrast to most traditional neural decoding methods, we may want to find a decoding based solely on the shape of the population activity, without making use of the stimuli labels. Here we apply a topological data analysis method described in:
 
 https://arxiv.org/abs/1711.07205
 
