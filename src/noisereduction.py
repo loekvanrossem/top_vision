@@ -6,16 +6,11 @@ import numpy as np
 import scipy
 import pandas as pd
 
-from matplotlib import pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
 from sklearn.decomposition import PCA
 
 from tqdm import trange
 from numba import njit, prange
 
-from persistence import persistence
-from decorators import multi_input
 from plotting import plot_slider
 
 
@@ -26,23 +21,25 @@ def compute_gradient(S, X, sigma, omega):
     d = X.shape[1]
     N = X.shape[0]
     M = S.shape[0]
-    for j in range(0,M):
+    for j in range(0, M):
         normsSX = np.square(S[j] - X).sum(axis=1)
         normsSS = np.square(S[j] - S).sum(axis=1)
-        expsSX = np.exp(-1/(2*sigma**2)*normsSX)
-        expsSS = np.exp(-1/(2*sigma**2)*normsSS)
+        expsSX = np.exp(-1 / (2 * sigma**2) * normsSX)
+        expsSS = np.exp(-1 / (2 * sigma**2) * normsSS)
         SX, SS = np.zeros(d), np.zeros(d)
-        for k in range(0,d):
-            SX[k] = -1/(N*sigma**2) * np.sum((S[j] - X)[:,k] * expsSX)
-            SS[k] = omega/(M*sigma**2) * np.sum((S[j] - S)[:,k] * expsSS)
+        for k in range(0, d):
+            SX[k] = -1 / (N * sigma**2) * np.sum((S[j] - X)[:, k] * expsSX)
+            SS[k] = omega / (M * sigma**2) * np.sum((S[j] - S)[:, k] * expsSS)
         gradF[j] = SX + SS
     return gradF
 
-@multi_input
-def top_noise_reduction(X, n=100, speed=0.02, omega=0.2, fraction=0.1, plot_history=False):
+
+def top_noise_reduction(
+    X, n=100, speed=0.02, omega=0.2, fraction=0.1, plot_history=False
+):
     """
     Topological denoising algorithm as in arxiv:0910.5947
-    
+
     Parameters
     ----------
     X: dataframe(n_datapoints, n_features):
@@ -61,40 +58,41 @@ def top_noise_reduction(X, n=100, speed=0.02, omega=0.2, fraction=0.1, plot_hist
     """
     n_plot_steps = 100
     N = X.shape[0]
-    S = X.iloc[np.random.choice(N, round(fraction*N), replace=False)]
+    S = X.iloc[np.random.choice(N, round(fraction * N), replace=False)]
     sigma = X.stack().std()
-    c = speed * np.max(scipy.spatial.distance.cdist(X, X, metric='euclidean'))
+    c = speed * np.max(scipy.spatial.distance.cdist(X, X, metric="euclidean"))
     history = [S]
 
     iterator = trange(0, n, position=0, leave=True)
     iterator.set_description("Topological noise reduction")
     for i in iterator:
         gradF = compute_gradient(S.to_numpy(), X.to_numpy(), sigma, omega)
-            
+
         if i == 0:
             maxgradF = np.max(np.sqrt(np.square(gradF).sum(axis=1)))
-        S = S + c* gradF/maxgradF
+        S = S + c * gradF / maxgradF
 
         if plot_history:
-            if i % np.ceil(n/n_plot_steps) == 0:
+            if i % np.ceil(n / n_plot_steps) == 0:
                 history.append(S)
-    
+
     if plot_history:
         plot_slider(history)
 
     return S
 
+
 @njit(parallel=True)
-def density_estimation(X,k):
+def density_estimation(X, k):
     """Estimates density at each point"""
     N = X.shape[0]
     densities = np.zeros(N)
     for i in prange(N):
-        distances = np.sum((X[i] - X)**2, axis=1)
-        densities[i] = 1/np.sort(distances)[k]
+        distances = np.sum((X[i] - X) ** 2, axis=1)
+        densities[i] = 1 / np.sort(distances)[k]
     return densities
 
-@multi_input
+
 def density_filtration(X, k, fraction):
     """
     Returns the points which are in locations with high density
@@ -110,11 +108,12 @@ def density_filtration(X, k, fraction):
     """
     print("Applying density filtration...", end=" ")
     N = X.shape[0]
-    X["densities"] = density_estimation(X.to_numpy().astype(np.float),k)
+    X["densities"] = density_estimation(X.to_numpy().astype(np.float), k)
     X = X.nlargest(int(fraction * N), "densities")
     X = X.drop(columns="densities")
     print("done")
     return X
+
 
 @njit(parallel=True)
 def compute_averages(X, r):
@@ -122,12 +121,12 @@ def compute_averages(X, r):
     N = X.shape[0]
     averages = np.zeros(X.shape)
     for i in prange(N):
-        distances = np.sum((X[i] - X)**2, axis=1)
+        distances = np.sum((X[i] - X) ** 2, axis=1)
         neighbors = X[distances < r]
-        averages[i] = np.sum(neighbors, axis=0)/len(neighbors)
+        averages[i] = np.sum(neighbors, axis=0) / len(neighbors)
     return averages
 
-@multi_input
+
 def neighborhood_average(X, r):
     """
     Replace each point by an average over its neighborhood
@@ -140,12 +139,12 @@ def neighborhood_average(X, r):
         Points are averaged over all points within radius r
     """
     print("Applying neighborhood average...", end=" ")
-    averages = compute_averages(X.to_numpy().astype(np.float),r)
+    averages = compute_averages(X.to_numpy().astype(np.float), r)
     print("done")
-    result = pd.DataFrame(data=averages,index=X.index)
+    result = pd.DataFrame(data=averages, index=X.index)
     return result
 
-@multi_input
+
 def z_cutoff(X, z_cutoff):
     """
     Remove outliers with a high Z-score
@@ -157,17 +156,18 @@ def z_cutoff(X, z_cutoff):
     z_cutoff : float
         The Z-score at which points are removed
     """
-    z=np.abs(scipy.stats.zscore(np.sqrt(np.square(X).sum(axis=1))))
+    z = np.abs(scipy.stats.zscore(np.sqrt(np.square(X).sum(axis=1))))
     result = X[(z < z_cutoff)]
-    print(f"{len(X) - len(result)} datapoints with Z-score above {z_cutoff}"
-          + " removed")
+    print(
+        f"{len(X) - len(result)} datapoints with Z-score above {z_cutoff}" + " removed"
+    )
     return result
 
-@multi_input
+
 def PCA_reduction(X, dim):
     """
     Use principle component analysis to reduce the data to a lower dimension
-    
+
     Also print the variance explained by each component
     Parameters
     ----------

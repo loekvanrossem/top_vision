@@ -19,11 +19,9 @@ from sklearn.decomposition import PCA
 
 from tqdm import trange
 
-from decorators import multi_input
 from gratings import angular_mean, grating_image
 
 
-@multi_input
 def plot_data(data, transformation="None", labels=None, colors=None, save_path=None):
     """
     Plot data colored by its indices and additional provided labels
@@ -162,7 +160,6 @@ def plot_connections(
     return
 
 
-@multi_input
 def plot_mean_against_index(data, value, index, circ=True, save_path=None):
     """
     Plot the mean value against an index.
@@ -203,7 +200,6 @@ def plot_mean_against_index(data, value, index, circ=True, save_path=None):
     return
 
 
-@multi_input
 def show_feature(
     decoding,
     Nimages=10,
@@ -347,7 +343,6 @@ def receptive_fields(data, feature_x, feature_y, N=100):
         ax.scatter(feature_x, feature_y, color=colors, s=3000)
         ax.axis("off")
     plt.show()
-
 
 
 def plot_slider(data_list):

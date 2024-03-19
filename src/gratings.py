@@ -14,23 +14,26 @@ from numba import njit
 
 import matplotlib.pyplot as plt
 
-from decorators import av_output
-
 GRATING_PARS = ["orientation", "frequency", "phase", "contrast"]
 Grating = namedtuple("Grating", GRATING_PARS)
+
 
 @njit
 def grating_function(x, y, grating):
     """Returns the value of a grating function at given x and y coordinates"""
     smallest_distance = 0.1
     theta, f, phi, C = grating
-    return C*np.exp(-1/2*f**2*smallest_distance**2)*np.cos(f*(x*np.cos(theta)
-                    + y*np.sin(theta)) + phi)
+    return (
+        C
+        * np.exp(-1 / 2 * f**2 * smallest_distance**2)
+        * np.cos(f * (x * np.cos(theta) + y * np.sin(theta)) + phi)
+    )
 
-def grating_image(grating, N = 50, plot=True):
+
+def grating_image(grating, N=50, plot=True):
     """
     Make an image of a grating
-    
+
     Parameters
     ----------
     grating: Grating
@@ -39,23 +42,24 @@ def grating_image(grating, N = 50, plot=True):
         The number of pixels in each direction
     plot: bool, optional, default True
         When true plot the image
-        
+
     Returns
     -------
     image: ndarray(N, N)
         An array of floats corresponding to the pixel values of the image
     """
     X = np.linspace(-1, 1, N)
-    image = np.zeros([N,N])
-    for i in range(0,N):
-        for j in range(0,N):
-            image[i,j] = grating_function(X[i],X[j], grating)
-    if (plot):
-        plt.imshow(image,"gray", vmin = -1, vmax = 1) 
+    image = np.zeros([N, N])
+    for i in range(0, N):
+        for j in range(0, N):
+            image[i, j] = grating_function(X[i], X[j], grating)
+    if plot:
+        plt.imshow(image, "gray", vmin=-1, vmax=1)
         plt.show()
     return image
 
-def angular_mean(X, period=2*np.pi, axis=None):
+
+def angular_mean(X, period=2 * np.pi, axis=None):
     """
     Average over an angular variable
 
@@ -69,21 +73,23 @@ def angular_mean(X, period=2*np.pi, axis=None):
         The axis of X to average over
     """
     ang_mean = (
-        (period/(2*np.pi))
-        * np.angle(np.mean(np.exp((2*np.pi/period) * X*1j),axis=axis))
+        (period / (2 * np.pi))
+        * np.angle(np.mean(np.exp((2 * np.pi / period) * X * 1j), axis=axis))
         % period
-        )
+    )
     return ang_mean
+
 
 @njit
 def sigmoid(x):
     """Sigmoid function"""
-    return 1/(1+np.exp(1*(1/2-x)))
+    return 1 / (1 + np.exp(1 * (1 / 2 - x)))
 
-def response(grating1, grating2, center=(0,0)):
+
+def response(grating1, grating2, center=(0, 0)):
     """
     Neural response of a simple cell to a grating image
-    
+
     Parameters
     ----------
     grating1: Grating
@@ -93,12 +99,13 @@ def response(grating1, grating2, center=(0,0)):
     center: (float,float), optional, default (0,0)
         The focal point
     """
-    fun1 = lambda s,t : grating_function(s + center[0], t + center[1], grating1)
-    fun2 = lambda s,t : grating_function(s ,t, grating2)
-    product = lambda s,t : fun1(s,t) * fun2(s,t)
+    fun1 = lambda s, t: grating_function(s + center[0], t + center[1], grating1)
+    fun2 = lambda s, t: grating_function(s, t, grating2)
+    product = lambda s, t: fun1(s, t) * fun2(s, t)
     integral = dblquad(product, -1, 1, -1, 1, epsabs=0.01)[0]
     response = sigmoid(integral)
     return response
+
 
 def get_locations(N, random=False):
     """
@@ -113,46 +120,52 @@ def get_locations(N, random=False):
         If true sample locations randomly as opposed to uniformly
     """
     N_or, N_fr, N_ph, N_co = N
-    
+
     if random:
         sampling = np.random.uniform
     else:
         sampling = np.linspace
-    
-    if (N_or==1):
+
+    if N_or == 1:
         orientation = [0]
     else:
-        if (N_ph==1):
-            orientation = sampling(0.0, 2 * (1-1/N_or) * np.pi, N_or)
+        if N_ph == 1:
+            orientation = sampling(0.0, 2 * (1 - 1 / N_or) * np.pi, N_or)
         else:
-            orientation = sampling(0.0, (1-1/N_or) * np.pi, N_or)
-    
-    if (N_fr==1):
-        frequency=[3]
+            orientation = sampling(0.0, (1 - 1 / N_or) * np.pi, N_or)
+
+    if N_fr == 1:
+        frequency = [3]
     else:
         frequency = sampling(0.0, 9, N_fr)
-        
-    if (N_ph==1):
-        phase = [np.pi/4]
+
+    if N_ph == 1:
+        phase = [np.pi / 4]
     else:
-        phase = sampling(0.0, 2 * (1-1/N_ph) * np.pi, N_ph)
-        
-    if (N_co==1):
+        phase = sampling(0.0, 2 * (1 - 1 / N_ph) * np.pi, N_ph)
+
+    if N_co == 1:
         contrast = [1]
     else:
         contrast = sampling(0.0, 1.0, N_co)
-        
+
     locations = list(product(orientation, frequency, phase, contrast))
     return locations
 
-@av_output
-def grating_model(Nn, Np, receptive_field_sigma=5,
-                  deltaT=None, random_focal_points=False, random_neurons=False,
-                  plot_stimuli=False):
+
+def grating_model(
+    Nn,
+    Np,
+    receptive_field_sigma=5,
+    deltaT=None,
+    random_focal_points=False,
+    random_neurons=False,
+    plot_stimuli=False,
+):
     """
     Simulate the firing of simple cells responding to images of gratings
 
-    Simple cells and stimuli are uniformly distributed along the parameter space    
+    Simple cells and stimuli are uniformly distributed along the parameter space
 
     Parameters
     ----------
@@ -184,42 +197,49 @@ def grating_model(Nn, Np, receptive_field_sigma=5,
     """
 
     Points = get_locations(Np)
-    Neurons = get_locations(([Nn,1][Np[0]==1],
-                            [Nn,1][Np[1]==1],
-                            [Nn,1][Np[2]==1],
-                            [Nn,1][Np[3]==1]),
-                            random=random_neurons)
-    
+    Neurons = get_locations(
+        (
+            [Nn, 1][Np[0] == 1],
+            [Nn, 1][Np[1] == 1],
+            [Nn, 1][Np[2] == 1],
+            [Nn, 1][Np[3] == 1],
+        ),
+        random=random_neurons,
+    )
+
     # Set focal points
     if random_focal_points:
-        focal_points = np.random.random([len(Points),2])*2-1
+        focal_points = np.random.random([len(Points), 2]) * 2 - 1
     else:
-        focal_points = np.zeros([len(Points),2])
-    
+        focal_points = np.zeros([len(Points), 2])
+
     # Compute firing rates
     rates = np.zeros([len(Points), len(Neurons)])
     iterator = trange(0, len(Points), position=0, leave=True)
     iterator.set_description("Simulating data points")
     for i in iterator:
-        if (i % 1 == 0):
+        if i % 1 == 0:
             if plot_stimuli:
                 grating_image(Points[i])
         for j in range(0, len(Neurons)):
-            rates[i,j] = response(Points[i] ,Neurons[j], center=focal_points[i])
-    
+            rates[i, j] = response(Points[i], Neurons[j], center=focal_points[i])
+
     # Add noise
     if deltaT is None:
         data = rates
     else:
         data = poisson(rates * deltaT)
-        
+
     data = pd.DataFrame(data)
-    data = pd.merge(pd.DataFrame(Points, columns = GRATING_PARS),
-                    data,left_index=True,right_index=True)
+    data = pd.merge(
+        pd.DataFrame(Points, columns=GRATING_PARS),
+        data,
+        left_index=True,
+        right_index=True,
+    )
     data = data.set_index(GRATING_PARS)
-    
+
     if deltaT is not None:
         print("Mean spike count: " + str(data.mean().mean()))
-    
-    return data
 
+    return data
