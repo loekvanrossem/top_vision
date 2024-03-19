@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from tqdm import trange
 import ripser
 from persim import plot_diagrams
-import gudhi
 
 
 def hausdorff(data1: np.ndarray, data2: np.ndarray, homdim: int, coeff: int) -> float:
@@ -170,49 +169,3 @@ def persistence(
         largest_components = dgm[largest_indices[:show_largest_homology]]
         print(f"Largest {homdim}-homology components:")
         print(largest_components)
-
-
-def persistence_witness(X, number_of_landmarks=100, max_alpha_square=0.0, homdim=1):
-    """
-    Plot the persistence diagram of a dataset using gudhi
-
-    Uses a witness complex allowing it to be used efficiently on larger datasets
-
-    Parameters
-    ----------
-    X: dataframe(n_datapoints, n_features):
-        Dataframe containing the data
-    number_of_landmarks : int, optional, default 100
-        The number of landmarks in the witness complex
-    max_alpha_square : double, optional, default 0.0
-        Maximal squared relaxation parameter
-    homdim : int, optional, default 1
-        The dimension of the homology
-    """
-    print("Sampling landmarks...", end=" ")
-
-    witnesses = X.to_numpy()
-    landmarks = gudhi.pick_n_random_points(
-        points=witnesses, nb_points=number_of_landmarks
-    )
-    print("done")
-    message = (
-        "EuclideanStrongWitnessComplex with max_edge_length="
-        + repr(max_alpha_square)
-        + " - Number of landmarks="
-        + repr(number_of_landmarks)
-    )
-    print(message)
-    witness_complex = gudhi.EuclideanStrongWitnessComplex(
-        witnesses=witnesses, landmarks=landmarks
-    )
-    simplex_tree = witness_complex.create_simplex_tree(
-        max_alpha_square=max_alpha_square, limit_dimension=homdim
-    )
-    message = "Number of simplices=" + repr(simplex_tree.num_simplices())
-    print(message)
-    diag = simplex_tree.persistence()
-    print("betti_numbers()=")
-    print(simplex_tree.betti_numbers())
-    gudhi.plot_persistence_diagram(diag, band=0.0)
-    plt.show()
