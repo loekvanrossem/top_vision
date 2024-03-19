@@ -5,7 +5,6 @@ Some plotting functions related to grating stimuli responses
 import numpy as np
 import pandas as pd
 import math
-import random
 
 import plotly.graph_objects as go
 from plotly.offline import plot
